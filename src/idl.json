@@ -1,0 +1,96 @@
+{
+  "version": "0.1.0",
+  "name": "solana_token_factory",
+  "instructions": [
+    {
+      "name": "createToken",
+      "accounts": [
+        { "name": "payer", "isMut": true, "isSigner": true },
+        { "name": "factoryState", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": true, "isSigner": true },
+        { "name": "tokenMetadata", "isMut": true, "isSigner": false },
+        { "name": "payerTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false },
+        { "name": "rent", "isMut": false, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": false }
+      ],
+      "args": [
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" },
+        { "name": "initialSupply", "type": "u64" },
+        { "name": "decimals", "type": "u8" },
+        { "name": "factoryBump", "type": "u8" }
+      ]
+    },
+    {
+      "name": "updateFee",
+      "accounts": [
+        { "name": "payer", "isMut": true, "isSigner": true },
+        { "name": "factoryState", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "newFee", "type": "u64" }]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "FactoryState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "publicKey" },
+          { "name": "creationFee", "type": "u64" }
+        ]
+      }
+    },
+    {
+      "name": "TokenMetadata",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "mint", "type": "publicKey" },
+          { "name": "name", "type": "string" },
+          { "name": "symbol", "type": "string" },
+          { "name": "creator", "type": "publicKey" }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "TokenCreated",
+      "fields": [
+        { "name": "mint", "type": "publicKey", "index": false },
+        { "name": "name", "type": "string", "index": false },
+        { "name": "symbol", "type": "string", "index": false },
+        { "name": "supply", "type": "u64", "index": false },
+        { "name": "creator", "type": "publicKey", "index": false }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidInput",
+      "msg": "Invalid input: empty name, symbol, or supply"
+    },
+    { "code": 6001, "name": "InsufficientFunds", "msg": "Insufficient fee" },
+    {
+      "code": 6002,
+      "name": "Unauthorized",
+      "msg": "Only owner can update fee"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidFee",
+      "msg": "Invalid fee: must be > 0 and <= 100 SOL"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidTokenAccount",
+      "msg": "Invalid associated token account"
+    }
+  ]
+}

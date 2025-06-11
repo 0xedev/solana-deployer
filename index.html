@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Solana Token Factory</title>
+  </head>
+  <body>
+    <h1>Solana Token Factory</h1>
+
+    <button id="connect-button">Connect Wallet</button>
+    <p id="wallet-address"></p>
+
+    <form id="token-form" style="display: none">
+      <input type="text" id="name" placeholder="Token Name" required />
+      <input type="text" id="symbol" placeholder="Symbol" required />
+      <input type="number" id="supply" placeholder="Initial Supply" required />
+      <input type="number" id="decimals" placeholder="Decimals" required />
+      <button type="submit">Create Token</button>
+    </form>
+
+    <p id="status"></p>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
