@@ -30,7 +30,7 @@ const TOKEN_PROGRAM_ID = new PublicKey(
 
 let provider, program;
 
-// --- Connect Wallet ---
+// --- Connect Wallet buton ---
 document
   .getElementById("connect-button")
   .addEventListener("click", async () => {
