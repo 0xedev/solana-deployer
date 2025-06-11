@@ -11,19 +11,20 @@ import {
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
   Keypair,
+  Transaction,
 } from "@solana/web3.js";
 import {
   getAssociatedTokenAddressSync,
-  TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  createInitializeMintInstruction,
+  MINT_SIZE,
 } from "@solana/spl-token";
 import * as anchor from "@project-serum/anchor";
-// import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import idl from "./idl.json" assert { type: "json" };
 import BN from "bn.js";
 
 // Constants
-const programId = new PublicKey("3dDGCv5yHufek6xPgKRvKUZWHk5Hn6DXnx5WkJFG8X3U");
+const programId = new PublicKey("7S8e5bweirM9Dq7ebtTb3FQg3QWGb9L1nhF43Fc2zySZ");
 const connection = new Connection(clusterApiUrl("devnet"));
 
 let provider, program;
@@ -64,6 +65,10 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
   try {
     const mint = Keypair.generate();
 
+    const lamports = await connection.getMinimumBalanceForRentExemption(
+      MINT_SIZE
+    );
+
     const [factoryState, factoryBump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [Buffer.from("factory_state")],
@@ -75,18 +80,43 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
       program.programId
     );
 
+    const accountInfo = await connection.getAccountInfo(metadata);
+    if (accountInfo) {
+      throw new Error("Metadata PDA already exists. Use a new mint or clean up devnet.");
+    }
+
     // Use the correct Token-2022 program ID for devnet
-    const TOKEN_2022_PROGRAM_ID_DEVNET = new PublicKey(
-      "9amFQ13YKsi8iG9omphCiXLnB1mUwFyLT4wSDMYnWFye"
+    const TOKEN_PROGRAM_ID = new PublicKey(
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
     );
 
     const ata = getAssociatedTokenAddressSync(
       mint.publicKey,
       payer,
       false,
-      TOKEN_2022_PROGRAM_ID_DEVNET,
+      TOKEN_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
+
+    const createMintIx = anchor.web3.SystemProgram.createAccount({
+      fromPubkey: payer,
+      newAccountPubkey: mint.publicKey,
+      space: MINT_SIZE,
+      lamports,
+      programId: TOKEN_PROGRAM_ID,
+    });
+
+    const initMintIx = createInitializeMintInstruction(
+      mint.publicKey,
+      decimals.toNumber(),
+      payer,
+      null,
+      TOKEN_PROGRAM_ID
+    );
+
+    const tx = new Transaction().add(createMintIx, initMintIx);
+
+    await provider.sendAndConfirm(tx, [mint]);
 
     await program.methods
       .createToken(name, symbol, supply, decimals, factoryBump)
@@ -96,7 +126,7 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
         factoryState,
         tokenMetadata: metadata,
         payerTokenAccount: ata,
-        tokenProgram: TOKEN_2022_PROGRAM_ID_DEVNET,
+        tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         rent: SYSVAR_RENT_PUBKEY,
@@ -108,6 +138,13 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
     document.getElementById("status").innerText = "Token created successfully!";
   } catch (err) {
     console.error(err);
+    if (err.getLogs) {
+      console.error("Transaction logs:", await err.getLogs());
+    }
     document.getElementById("status").innerText = "Token creation failed.";
   }
 });
+
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);

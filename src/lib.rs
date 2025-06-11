@@ -1,11 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, TokenAccount},
-    token_2022::{self, InitializeMint, MintTo, Token2022},
+    token::{self, InitializeMint, Mint, MintTo, Token, TokenAccount},
 };
 
-declare_id!("3dDGCv5yHufek6xPgKRvKUZWHk5Hn6DXnx5WkJFG8X3U");
+// Replace with your own program ID
+declare_id!("7S8e5bweirM9Dq7ebtTb3FQg3QWGb9L1nhF43Fc2zySZ");
 
 #[program]
 pub mod solana_token_factory {
@@ -59,19 +59,12 @@ pub mod solana_token_factory {
                 rent: ctx.accounts.rent.to_account_info(),
             },
         );
-        token_2022::initialize_mint(
+        token::initialize_mint(
             cpi_ctx,
             decimals,
             &ctx.accounts.payer.key(),
             Some(&ctx.accounts.payer.key()),
         )?;
-
-        // Create associated token account for payer
-        let ata = &ctx.accounts.payer_token_account;
-        if ata.owner != ctx.accounts.payer.key() || ata.mint != ctx.accounts.mint.key() {
-            msg!("Invalid ATA");
-            return err!(ErrorCode::InvalidTokenAccount);
-        }
 
         // Mint to payer's ATA
         let cpi_ctx = CpiContext::new(
@@ -82,7 +75,7 @@ pub mod solana_token_factory {
                 authority: ctx.accounts.payer.to_account_info(),
             },
         );
-        token_2022::mint_to(cpi_ctx, initial_supply)?;
+        token::mint_to(cpi_ctx, initial_supply)?;
 
         // Record basic metadata (optional, not verified on-chain)
         let token_meta = &mut ctx.accounts.token_metadata;
@@ -161,9 +154,9 @@ pub struct CreateToken<'info> {
         associated_token::mint = mint,
         associated_token::authority = payer
     )]
-    pub payer_token_account: Account<'info, anchor_spl::token::TokenAccount>,
+    pub payer_token_account: Account<'info, TokenAccount>,
 
-    pub token_program: Program<'info, Token2022>,
+    pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
