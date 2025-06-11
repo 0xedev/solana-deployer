@@ -63,8 +63,12 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
 
   const name = document.getElementById("name").value;
   const symbol = document.getElementById("symbol").value;
-  const supply = new BN(document.getElementById("supply").value);
-  const decimals = new BN(document.getElementById("decimals").value);
+  const decimals = parseInt(document.getElementById("decimals").value);
+  
+  // Convert the supply to account for decimals
+  const rawSupply = document.getElementById("supply").value;
+  const supply = new BN(rawSupply).mul(new BN(10).pow(new BN(decimals)));
+  
   const payer = provider.wallet.publicKey;
 
   if (!name || !symbol || supply.isZero() || !decimals) {
