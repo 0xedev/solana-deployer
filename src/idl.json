@@ -28,6 +28,7 @@
       "name": "updateFee",
       "accounts": [
         { "name": "payer", "isMut": true, "isSigner": true },
+        { "name": "owner", "isMut": true, "isSigner": false },
         { "name": "factoryState", "isMut": true, "isSigner": false },
         { "name": "systemProgram", "isMut": false, "isSigner": false }
       ],
@@ -74,23 +75,22 @@
     {
       "code": 6000,
       "name": "InvalidInput",
-      "msg": "Invalid input: empty name, symbol, or supply"
+      "msg": "Invalid input: name, symbol, or supply is invalid."
     },
-    { "code": 6001, "name": "InsufficientFunds", "msg": "Insufficient fee" },
+    {
+      "code": 6001,
+      "name": "InsufficientFunds",
+      "msg": "Insufficient funds to pay creation fee."
+    },
     {
       "code": 6002,
       "name": "Unauthorized",
-      "msg": "Only owner can update fee"
+      "msg": "This action can only be performed by the owner."
     },
     {
       "code": 6003,
       "name": "InvalidFee",
-      "msg": "Invalid fee: must be > 0 and <= 100 SOL"
-    },
-    {
-      "code": 6004,
-      "name": "InvalidTokenAccount",
-      "msg": "Invalid associated token account"
+      "msg": "The specified fee amount is invalid."
     }
   ]
 }

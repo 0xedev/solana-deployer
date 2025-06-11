@@ -16,8 +16,6 @@ import {
 import {
   getAssociatedTokenAddressSync,
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  createInitializeMintInstruction,
-  MINT_SIZE,
 } from "@solana/spl-token";
 import * as anchor from "@project-serum/anchor";
 import idl from "./idl.json" assert { type: "json" };
@@ -25,10 +23,14 @@ import BN from "bn.js";
 
 // Constants
 const programId = new PublicKey("7S8e5bweirM9Dq7ebtTb3FQg3QWGb9L1nhF43Fc2zySZ");
-const connection = new Connection(clusterApiUrl("devnet"));
+const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+);
 
 let provider, program;
 
+// --- Connect Wallet ---
 document
   .getElementById("connect-button")
   .addEventListener("click", async () => {
@@ -40,17 +42,22 @@ document
         ).innerText = `Wallet: ${res.publicKey}`;
         document.getElementById("token-form").style.display = "block";
 
-        provider = new anchor.AnchorProvider(connection, window.solana, {});
+        // Set up Anchor provider and program
+        provider = new anchor.AnchorProvider(connection, window.solana, {
+          commitment: "confirmed",
+        });
         anchor.setProvider(provider);
         program = new anchor.Program(idl, programId, provider);
       } catch (err) {
         console.error("Wallet connection error", err);
+        alert("Failed to connect to Phantom Wallet.");
       }
     } else {
-      alert("Please install Phantom Wallet");
+      alert("Please install Phantom Wallet to use this app.");
     }
   });
 
+// --- Form Submission to Create Token ---
 document.getElementById("token-form").addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -60,36 +67,34 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
   const decimals = new BN(document.getElementById("decimals").value);
   const payer = provider.wallet.publicKey;
 
-  document.getElementById("status").innerText = "Creating token...";
+  if (!name || !symbol || supply.isZero() || !decimals) {
+    document.getElementById("status").innerText = "Please fill out all fields.";
+    return;
+  }
+
+  document.getElementById("status").innerText =
+    "Creating token, please wait...";
 
   try {
+    // Generate a new keypair for the mint account.
+    // The program will create this account, but we need the address and signer.
     const mint = Keypair.generate();
+    console.log(`New Mint Keypair Generated: ${mint.publicKey.toBase58()}`);
 
-    const lamports = await connection.getMinimumBalanceForRentExemption(
-      MINT_SIZE
-    );
-
+    // Get PDA for factory state
     const [factoryState, factoryBump] =
       anchor.web3.PublicKey.findProgramAddressSync(
         [Buffer.from("factory_state")],
         program.programId
       );
 
+    // Get PDA for the token metadata
     const [metadata] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("token_metadata"), mint.publicKey.toBuffer()],
       program.programId
     );
 
-    const accountInfo = await connection.getAccountInfo(metadata);
-    if (accountInfo) {
-      throw new Error("Metadata PDA already exists. Use a new mint or clean up devnet.");
-    }
-
-    // Use the correct Token-2022 program ID for devnet
-    const TOKEN_PROGRAM_ID = new PublicKey(
-      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-    );
-
+    // Get the associated token account for the payer
     const ata = getAssociatedTokenAddressSync(
       mint.publicKey,
       payer,
@@ -98,27 +103,9 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
 
-    const createMintIx = anchor.web3.SystemProgram.createAccount({
-      fromPubkey: payer,
-      newAccountPubkey: mint.publicKey,
-      space: MINT_SIZE,
-      lamports,
-      programId: TOKEN_PROGRAM_ID,
-    });
-
-    const initMintIx = createInitializeMintInstruction(
-      mint.publicKey,
-      decimals.toNumber(),
-      payer,
-      null,
-      TOKEN_PROGRAM_ID
-    );
-
-    const tx = new Transaction().add(createMintIx, initMintIx);
-
-    await provider.sendAndConfirm(tx, [mint]);
-
-    await program.methods
+    // Call the program's `createToken` instruction
+    console.log("Calling the on-chain program to create the token...");
+    const programSignature = await program.methods
       .createToken(name, symbol, supply, decimals, factoryBump)
       .accounts({
         payer,
@@ -132,19 +119,24 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
         rent: SYSVAR_RENT_PUBKEY,
         owner: payer,
       })
+      // The `mint` keypair must sign to authorize the creation of the account
       .signers([mint])
-      .rpc();
+      .rpc({ commitment: "confirmed" });
 
-    document.getElementById("status").innerText = "Token created successfully!";
+    console.log(`Token created successfully! Signature: ${programSignature}`);
+    const successMessage = `Token created! Mint Address: ${mint.publicKey.toBase58()}`;
+    document.getElementById("status").innerText = successMessage;
+
+    // Optional: Add a link to the Solana Explorer
+    const explorerLink = `https://explorer.solana.com/address/${mint.publicKey.toBase58()}?cluster=devnet`;
+    const statusElement = document.getElementById("status");
+    statusElement.innerHTML = `${successMessage} <a href="${explorerLink}" target="_blank" rel="noopener noreferrer">(View on Explorer)</a>`;
   } catch (err) {
-    console.error(err);
-    if (err.getLogs) {
-      console.error("Transaction logs:", await err.getLogs());
+    console.error("Error creating token:", err);
+    if (err.logs) {
+      console.error("Transaction logs:", err.logs);
     }
-    document.getElementById("status").innerText = "Token creation failed.";
+    document.getElementById("status").innerText =
+      "Token creation failed. Check the console for details.";
   }
 });
-
-const TOKEN_PROGRAM_ID = new PublicKey(
-  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-);
