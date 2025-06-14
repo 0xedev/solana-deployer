@@ -2,89 +2,444 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Solana Token Factory</title>
     <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
       body {
-        font-family: Arial, sans-serif;
-        max-width: 800px;
-        margin: 0 auto;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
         padding: 20px;
-        background-color: #f5f5f5;
+        color: #333;
+      }
+
+      .container {
+        max-width: 900px;
+        width: 100%;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(15px);
+        border-radius: 24px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        overflow: hidden;
+        animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(40px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .header {
+        background: linear-gradient(135deg, #512da8, #673ab7);
+        padding: 50px 40px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .header::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='4'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
+          repeat;
+        animation: float 20s ease-in-out infinite;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0px) rotate(0deg);
+        }
+        50% {
+          transform: translateY(-10px) rotate(180deg);
+        }
       }
 
       h1 {
-        color: #512da8;
-        text-align: center;
+        font-size: 3.2rem;
+        font-weight: 800;
+        color: white;
+        margin-bottom: 12px;
+        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        letter-spacing: -0.02em;
+        position: relative;
+        z-index: 2;
+      }
+
+      .subtitle {
+        font-size: 1.2rem;
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 400;
+        position: relative;
+        z-index: 2;
+      }
+
+      .main-content {
+        padding: 50px 40px;
+        max-width: 600px;
+        margin: 0 auto;
       }
 
       #connect-button {
         display: block;
-        margin: 20px auto;
-        padding: 10px 20px;
-        background-color: #512da8;
+        width: 100%;
+        margin: 0 auto 40px;
+        padding: 20px 40px;
+        background: linear-gradient(135deg, #512da8, #673ab7);
         color: white;
         border: none;
-        border-radius: 5px;
+        border-radius: 16px;
+        font-size: 1.2rem;
+        font-weight: 700;
         cursor: pointer;
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 10px 30px rgba(81, 45, 168, 0.4);
+        position: relative;
+        overflow: hidden;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      #connect-button::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.2),
+          transparent
+        );
+        transition: left 0.5s;
+      }
+
+      #connect-button:hover::before {
+        left: 100%;
       }
 
       #connect-button:hover {
-        background-color: #673ab7;
+        transform: translateY(-3px);
+        box-shadow: 0 15px 40px rgba(81, 45, 168, 0.5);
+        background: linear-gradient(135deg, #673ab7, #7e57c2);
+      }
+
+      #connect-button:active {
+        transform: translateY(-1px);
+        transition: all 0.1s;
       }
 
       #wallet-address {
         text-align: center;
-        color: #666;
+        color: #4caf50;
+        font-weight: 600;
+        font-size: 1.1rem;
+        background: linear-gradient(135deg, #e8f5e8, #f1f8e9);
+        padding: 20px;
+        border-radius: 12px;
+        border: 2px solid #4caf50;
+        margin-bottom: 30px;
+        word-break: break-all;
+        font-family: "Courier New", monospace;
+        animation: fadeIn 0.6s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       #token-form {
-        display: flex;
+        display: none;
         flex-direction: column;
-        gap: 10px;
-        max-width: 400px;
-        margin: 20px auto;
+        gap: 25px;
+        animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .form-group {
+        position: relative;
       }
 
       input {
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
+        width: 100%;
+        padding: 18px 20px;
+        border: 2px solid #e1e5e9;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        background: white;
+        color: #333;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: #512da8;
+        box-shadow: 0 0 0 4px rgba(81, 45, 168, 0.1);
+        transform: translateY(-2px);
+      }
+
+      input::placeholder {
+        color: #999;
+        font-weight: 400;
       }
 
       button[type="submit"] {
-        padding: 10px 20px;
-        background-color: #4caf50;
+        width: 100%;
+        padding: 20px 40px;
+        background: linear-gradient(135deg, #4caf50, #45a049);
         color: white;
         border: none;
-        border-radius: 5px;
+        border-radius: 16px;
+        font-size: 1.2rem;
+        font-weight: 700;
         cursor: pointer;
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 10px 30px rgba(76, 175, 80, 0.4);
+        margin-top: 15px;
+        position: relative;
+        overflow: hidden;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      button[type="submit"]::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.2),
+          transparent
+        );
+        transition: left 0.5s;
+      }
+
+      button[type="submit"]:hover::before {
+        left: 100%;
       }
 
       button[type="submit"]:hover {
-        background-color: #45a049;
+        transform: translateY(-3px);
+        box-shadow: 0 15px 40px rgba(76, 175, 80, 0.5);
+        background: linear-gradient(135deg, #45a049, #66bb6a);
+      }
+
+      button[type="submit"]:active {
+        transform: translateY(-1px);
+        transition: all 0.1s;
       }
 
       #status {
         text-align: center;
         color: #666;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-top: 30px;
+        padding: 20px;
+        border-radius: 12px;
+        min-height: 20px;
+        animation: fadeIn 0.5s ease-out;
+      }
+
+      .success-status {
+        background: linear-gradient(135deg, #e8f5e8, #f1f8e9);
+        color: #2e7d32;
+        border: 2px solid #4caf50;
+      }
+
+      .error-status {
+        background: linear-gradient(135deg, #ffebee, #fce4ec);
+        color: #c62828;
+        border: 2px solid #f44336;
+      }
+
+      .loading-status {
+        background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+        color: #1565c0;
+        border: 2px solid #2196f3;
+      }
+
+      /* Responsive Design */
+      @media (max-width: 768px) {
+        body {
+          padding: 15px;
+        }
+
+        .container {
+          border-radius: 20px;
+        }
+
+        .header {
+          padding: 40px 25px;
+        }
+
+        h1 {
+          font-size: 2.5rem;
+        }
+
+        .subtitle {
+          font-size: 1.1rem;
+        }
+
+        .main-content {
+          padding: 40px 25px;
+        }
+
+        #connect-button,
+        button[type="submit"] {
+          padding: 18px 32px;
+          font-size: 1.1rem;
+        }
+
+        input {
+          padding: 16px 18px;
+          font-size: 1rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        h1 {
+          font-size: 2rem;
+        }
+
+        .subtitle {
+          font-size: 1rem;
+        }
+
+        .main-content {
+          padding: 30px 20px;
+        }
+      }
+
+      /* Enhanced Focus States for Accessibility */
+      button:focus-visible,
+      input:focus-visible {
+        outline: 3px solid #512da8;
+        outline-offset: 2px;
+      }
+
+      /* Smooth Scrolling */
+      html {
+        scroll-behavior: smooth;
+      }
+
+      /* Loading Animation */
+      .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 10px;
+        vertical-align: middle;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
     </style>
   </head>
   <body>
-    <h1>Solana Token Factory</h1>
+    <div class="container">
+      <div class="header">
+        <h1>🚀 Solana Token Factory</h1>
+        <p class="subtitle">
+          Create custom SPL tokens with professional-grade tools
+        </p>
+      </div>
 
-    <button id="connect-button">Connect Wallet</button>
-    <p id="wallet-address"></p>
+      <div class="main-content">
+        <button id="connect-button">🔗 Connect Wallet</button>
+        <p id="wallet-address"></p>
 
-    <form id="token-form" style="display: none">
-      <input type="text" id="name" placeholder="Token Name" required />
-      <input type="text" id="symbol" placeholder="Symbol" required />
-      <input type="number" id="supply" placeholder="Initial Supply" required />
-      <input type="number" id="decimals" placeholder="Decimals" required />
-      <button type="submit">Create Token</button>
-    </form>
+        <form id="token-form">
+          <div class="form-group">
+            <input
+              type="text"
+              id="name"
+              placeholder="Token Name (e.g., MyAwesome Token)"
+              required
+            />
+          </div>
 
-    <p id="status"></p>
+          <div class="form-group">
+            <input
+              type="text"
+              id="symbol"
+              placeholder="Symbol (e.g., MAT)"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <input
+              type="number"
+              id="supply"
+              placeholder="Initial Supply (e.g., 1000000)"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <input
+              type="number"
+              id="decimals"
+              placeholder="Decimals (e.g., 9)"
+              required
+            />
+          </div>
+
+          <button type="submit">🪙 Create Token</button>
+        </form>
+
+        <p id="status"></p>
+      </div>
+    </div>
 
     <script type="module" src="src/main.js"></script>
   </body>

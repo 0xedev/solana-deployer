@@ -1,6 +1,6 @@
 import { Buffer } from "buffer";
 import process from "process";
-
+import { uploadMetadataToPinata } from "./pinataStorage.js";
 window.Buffer = Buffer;
 window.process = process;
 
@@ -20,6 +20,7 @@ import {
 import * as anchor from "@project-serum/anchor";
 import idl from "./idl.json" assert { type: "json" };
 import BN from "bn.js";
+import * as Metaplex from "@metaplex-foundation/mpl-token-metadata";
 
 // Constants
 const programId = new PublicKey("7S8e5bweirM9Dq7ebtTb3FQg3QWGb9L1nhF43Fc2zySZ");
@@ -27,35 +28,43 @@ const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 const TOKEN_PROGRAM_ID = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 );
+const METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
 
 let provider, program;
 
 // --- Connect Wallet buton ---
-document
-  .getElementById("connect-button")
-  .addEventListener("click", async () => {
-    if (window.solana && window.solana.isPhantom) {
-      try {
-        const res = await window.solana.connect();
-        document.getElementById(
-          "wallet-address"
-        ).innerText = `Wallet: ${res.publicKey}`;
-        document.getElementById("token-form").style.display = "block";
+const connectButton = document.getElementById("connect-button");
+const walletDisplay = document.getElementById("wallet-address");
+const tokenForm = document.getElementById("token-form");
 
-        // Set up Anchor provider and program
-        provider = new anchor.AnchorProvider(connection, window.solana, {
-          commitment: "confirmed",
-        });
-        anchor.setProvider(provider);
-        program = new anchor.Program(idl, programId, provider);
-      } catch (err) {
-        console.error("Wallet connection error", err);
-        alert("Failed to connect to Phantom Wallet.");
-      }
-    } else {
-      alert("Please install Phantom Wallet to use this app.");
+connectButton.addEventListener("click", async () => {
+  if (window.solana && window.solana.isPhantom) {
+    try {
+      const res = await window.solana.connect();
+
+      // Hide connect button
+      connectButton.style.display = "none";
+
+      // Show wallet address and token form
+      walletDisplay.innerText = `Wallet: ${res.publicKey.toBase58()}`;
+      tokenForm.style.display = "block";
+
+      // Set up Anchor provider and program
+      provider = new anchor.AnchorProvider(connection, window.solana, {
+        commitment: "confirmed",
+      });
+      anchor.setProvider(provider);
+      program = new anchor.Program(idl, programId, provider);
+    } catch (err) {
+      console.error("Wallet connection error", err);
+      alert("Failed to connect to Phantom Wallet.");
     }
-  });
+  } else {
+    alert("Please install Phantom Wallet to use this app.");
+  }
+});
 
 // --- Form Submission to Create Token ---
 document.getElementById("token-form").addEventListener("submit", async (e) => {
@@ -64,41 +73,48 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
   const name = document.getElementById("name").value;
   const symbol = document.getElementById("symbol").value;
   const decimals = parseInt(document.getElementById("decimals").value);
-  
-  // Convert the supply to account for decimals
   const rawSupply = document.getElementById("supply").value;
-  const supply = new BN(rawSupply).mul(new BN(10).pow(new BN(decimals)));
-  
-  const payer = provider.wallet.publicKey;
 
-  if (!name || !symbol || supply.isZero() || !decimals) {
-    document.getElementById("status").innerText = "Please fill out all fields.";
+  if (!name || !symbol || isNaN(decimals) || !rawSupply) {
+    document.getElementById("status").innerText =
+      "Please fill out all fields correctly.";
     return;
   }
 
-  document.getElementById("status").innerText =
-    "Creating token, please wait...";
+  const supply = new BN(rawSupply).mul(new BN(10).pow(new BN(decimals)));
+  const payer = provider.wallet.publicKey;
+
+  document.getElementById("status").innerText = "Uploading metadata to IPFS...";
 
   try {
-    // Generate a new keypair for the mint account.
-    // The program will create this account, but we need the address and signer.
+    // Step 1: Upload metadata to get the URI
+    const metadataUri = await uploadMetadataToPinata(
+      {
+        name: name,
+        symbol: symbol,
+        description: "Minted with Token Factory",
+        image: "",
+      },
+      name
+    );
+
+    console.log(`Metadata uploaded to Pinata. URI: ${metadataUri}`);
+    document.getElementById("status").innerText = "Creating token on-chain...";
+
+    // Step 2: Determine the factory owner and create the token
     const mint = Keypair.generate();
     console.log(`New Mint Keypair Generated: ${mint.publicKey.toBase58()}`);
 
-    // Get PDA for factory state
-    const [factoryState, factoryBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("factory_state")],
-        program.programId
-      );
+    const [factoryStatePda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("factory_state")],
+      program.programId
+    );
 
-    // Get PDA for the token metadata
-    const [metadata] = anchor.web3.PublicKey.findProgramAddressSync(
+    const [tokenMetadataPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("token_metadata"), mint.publicKey.toBuffer()],
       program.programId
     );
 
-    // Get the associated token account for the payer
     const ata = getAssociatedTokenAddressSync(
       mint.publicKey,
       payer,
@@ -107,31 +123,84 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
 
-    // Call the program's `createToken` instruction
-    console.log("Calling the on-chain program to create the token...");
+    const factoryOwner = new PublicKey(
+      "D7TWwK544nwb3FtsgavPsq666cEcnKwn9HiXLuVPGkiP"
+    );
+
+    const [_, bump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("factory_state")],
+      program.programId
+    );
+    const factoryBump = bump;
+
+    // ✅ CORRECTED ACCOUNT ORDER
     const programSignature = await program.methods
       .createToken(name, symbol, supply, decimals, factoryBump)
       .accounts({
-        payer,
+        payer: payer,
+        factoryState: factoryStatePda,
         mint: mint.publicKey,
-        factoryState,
-        tokenMetadata: metadata,
+        tokenMetadata: tokenMetadataPda,
         payerTokenAccount: ata,
+        // System accounts are typically grouped together.
+        // The 'owner' account was likely added after these in the struct.
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         rent: SYSVAR_RENT_PUBKEY,
-        owner: payer,
+        owner: factoryOwner, // Moved to the end
       })
-      // The `mint` keypair must sign to authorize the creation of the account
       .signers([mint])
       .rpc({ commitment: "confirmed" });
 
     console.log(`Token created successfully! Signature: ${programSignature}`);
-    const successMessage = `Token created! Mint Address: ${mint.publicKey.toBase58()}`;
-    document.getElementById("status").innerText = successMessage;
+    document.getElementById("status").innerText =
+      "Token created. Now updating metadata...";
 
-    // Optional: Add a link to the Solana Explorer
+    // Step 3: Update the metadata account with the URI (Metaplex metadata)
+    const metadataData = {
+      name: name,
+      symbol: symbol,
+      uri: metadataUri,
+      sellerFeeBasisPoints: 0,
+      creators: null,
+      collection: null,
+      uses: null,
+    };
+
+    const [metaplexMetadataPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("metadata"),
+        METADATA_PROGRAM_ID.toBuffer(),
+        mint.publicKey.toBuffer(),
+      ],
+      METADATA_PROGRAM_ID
+    );
+
+    const updateMetadataTx = new Transaction().add(
+      Metaplex.createUpdateMetadataAccountV2Instruction(
+        {
+          metadata: metaplexMetadataPda,
+          updateAuthority: payer,
+        },
+        {
+          updateMetadataAccountArgsV2: {
+            data: metadataData,
+            updateAuthority: payer,
+            primarySaleHappened: true,
+            isMutable: true,
+          },
+        }
+      )
+    );
+
+    const updateMetadataSignature = await provider.sendAndConfirm(
+      updateMetadataTx
+    );
+    console.log("Metadata updated:", updateMetadataSignature);
+
+    // Final Success Message
+    const successMessage = `Token and metadata created! Mint Address: ${mint.publicKey.toBase58()}`;
     const explorerLink = `https://explorer.solana.com/address/${mint.publicKey.toBase58()}?cluster=devnet`;
     const statusElement = document.getElementById("status");
     statusElement.innerHTML = `${successMessage} <a href="${explorerLink}" target="_blank" rel="noopener noreferrer">(View on Explorer)</a>`;
@@ -140,7 +209,9 @@ document.getElementById("token-form").addEventListener("submit", async (e) => {
     if (err.logs) {
       console.error("Transaction logs:", err.logs);
     }
-    document.getElementById("status").innerText =
-      "Token creation failed. Check the console for details.";
+    const errorDetails = err.message || JSON.stringify(err);
+    document.getElementById(
+      "status"
+    ).innerText = `Token creation failed. Check the console for details. Error: ${errorDetails}`;
   }
 });

@@ -10,11 +10,11 @@
         { "name": "mint", "isMut": true, "isSigner": true },
         { "name": "tokenMetadata", "isMut": true, "isSigner": false },
         { "name": "payerTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "owner", "isMut": true, "isSigner": false },
         { "name": "tokenProgram", "isMut": false, "isSigner": false },
         { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
         { "name": "systemProgram", "isMut": false, "isSigner": false },
-        { "name": "rent", "isMut": false, "isSigner": false },
-        { "name": "owner", "isMut": true, "isSigner": false }
+        { "name": "rent", "isMut": false, "isSigner": false }
       ],
       "args": [
         { "name": "name", "type": "string" },
@@ -28,7 +28,6 @@
       "name": "updateFee",
       "accounts": [
         { "name": "payer", "isMut": true, "isSigner": true },
-        { "name": "owner", "isMut": true, "isSigner": false },
         { "name": "factoryState", "isMut": true, "isSigner": false },
         { "name": "systemProgram", "isMut": false, "isSigner": false }
       ],

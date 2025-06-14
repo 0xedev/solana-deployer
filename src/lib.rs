@@ -3,9 +3,13 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{self, Mint, MintTo, Token, TokenAccount},
 };
+use std::str::FromStr;
 
-// Replace with your own program ID
 declare_id!("7S8e5bweirM9Dq7ebtTb3FQg3QWGb9L1nhF43Fc2zySZ");
+
+// Hardcoded factory owner address
+const FACTORY_OWNER: &str = "D7TWwK544nwb3FtsgavPsq666cEcnKwn9HiXLuVPGkiP";
+const DEFAULT_CREATION_FEE: u64 = 100_000; // 0.0001 SOL
 
 #[program]
 pub mod solana_token_factory {
@@ -17,18 +21,19 @@ pub mod solana_token_factory {
         symbol: String,
         initial_supply: u64,
         decimals: u8,
-        _factory_bump: u8, // The bump is available in factory_state.bump, so this argument is not needed.
+        _factory_bump: u8,
     ) -> Result<()> {
+        let factory_owner = Pubkey::from_str(FACTORY_OWNER).unwrap();
         let factory_state = &mut ctx.accounts.factory_state;
 
-        // Initialize factory state on first use
-        if factory_state.owner == Pubkey::default() {
-            factory_state.owner = ctx.accounts.owner.key();
-            factory_state.creation_fee = 100_000; // 0.0001 SOL
-        }
+        // Always enforce hardcoded owner
+        factory_state.owner = factory_owner;
+        factory_state.creation_fee = DEFAULT_CREATION_FEE;
 
         if name.is_empty() || symbol.is_empty() || initial_supply == 0 {
-            msg!("Invalid input: name/symbol cannot be empty and supply must be greater than zero.");
+            msg!(
+                "Invalid input: name/symbol cannot be empty and supply must be greater than zero."
+            );
             return err!(ErrorCode::InvalidInput);
         }
 
@@ -37,25 +42,21 @@ pub mod solana_token_factory {
             return err!(ErrorCode::InsufficientFunds);
         }
 
-        // Transfer fee to the factory owner
-        if factory_state.creation_fee > 0 {
-             let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-                &ctx.accounts.payer.key(),
-                &ctx.accounts.owner.key(),
-                factory_state.creation_fee,
-            );
-            anchor_lang::solana_program::program::invoke(
-                &transfer_ix,
-                &[
-                    ctx.accounts.payer.to_account_info(),
-                    ctx.accounts.owner.to_account_info(),
-                    ctx.accounts.system_program.to_account_info(),
-                ],
-            )?;
-        }
+        // Transfer fee to hardcoded factory owner
+        let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.payer.key(),
+            &factory_owner,
+            factory_state.creation_fee,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &transfer_ix,
+            &[
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
 
-
-        // Mint the initial supply to the payer's associated token account
+        // Mint initial supply
         let cpi_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             MintTo {
@@ -66,7 +67,7 @@ pub mod solana_token_factory {
         );
         token::mint_to(cpi_ctx, initial_supply)?;
 
-        // Store the metadata on-chain
+        // Record metadata
         let token_meta = &mut ctx.accounts.token_metadata;
         token_meta.mint = ctx.accounts.mint.key();
         token_meta.name = name.clone();
@@ -85,22 +86,21 @@ pub mod solana_token_factory {
     }
 
     pub fn update_fee(ctx: Context<UpdateFee>, new_fee: u64) -> Result<()> {
-        let factory_state = &mut ctx.accounts.factory_state;
+        let expected_owner = Pubkey::from_str(FACTORY_OWNER).unwrap();
 
-        if ctx.accounts.payer.key() != factory_state.owner {
-            msg!("Only the factory owner can update the fee.");
+        if ctx.accounts.payer.key() != expected_owner {
             return err!(ErrorCode::Unauthorized);
         }
 
-        // Allow setting fee to 0, but not excessively high
-        if new_fee > 100_000_000_000 { // 100 SOL limit
+        if new_fee > 100_000_000_000 {
             msg!("Invalid fee: must be less than or equal to 100 SOL.");
             return err!(ErrorCode::InvalidFee);
         }
 
+        let factory_state = &mut ctx.accounts.factory_state;
         factory_state.creation_fee = new_fee;
-        msg!("Fee updated to {} lamports", new_fee);
 
+        msg!("Fee updated to {} lamports", new_fee);
         Ok(())
     }
 }
@@ -114,7 +114,7 @@ pub struct CreateToken<'info> {
     #[account(
         init_if_needed,
         payer = payer,
-        space = 8 + 32 + 8, // Discriminator + owner pubkey + fee u64
+        space = 8 + 32 + 8,
         seeds = [b"factory_state"],
         bump
     )]
@@ -150,11 +150,6 @@ pub struct CreateToken<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
-
-    /// The owner of the factory, who receives the fees.
-    /// CHECK: This is not read from, only used as a destination for the fee transfer.
-    #[account(mut)]
-    pub owner: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
@@ -162,15 +157,10 @@ pub struct UpdateFee<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// CHECK: Owner's account, verified through has_one constraint
-    #[account(mut)]
-    pub owner: AccountInfo<'info>,
-
     #[account(
         mut,
         seeds = [b"factory_state"],
-        bump,
-        has_one = owner @ErrorCode::Unauthorized,
+        bump
     )]
     pub factory_state: Account<'info, FactoryState>,
 
@@ -193,8 +183,6 @@ pub struct TokenMetadata {
 }
 
 impl TokenMetadata {
-    // Define a constant for the space calculation to keep it clean.
-    // 8 (discriminator) + 32 (mint) + (4 + 32 string len) + (4 + 10 string len) + 32 (creator)
     pub const LEN: usize = 8 + 32 + (4 + 32) + (4 + 10) + 32;
 }
 
